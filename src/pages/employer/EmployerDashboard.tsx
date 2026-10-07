@@ -1,10 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ClockIcon, FlagIcon, SearchIcon } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { CredentialRecord } from '../../components/CredentialRecord';
+import { NoticeBanner } from '../../components/NoticeBanner';
 import { RevokeModal } from '../../components/RevokeModal';
+import { useVerifiedCredential } from '../../api/usePublic';
 import { StarRating } from '../../components/StarRating';
 import { useSkillPass } from '../../contexts/SkillPassContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,25 +24,33 @@ export function EmployerDashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const startRef = useRef<number | null>(null);
 
-  const credential = searched ? credentials.find((c) => c.id === searched) : undefined;
+  const [searchNo, setSearchNo] = useState(0);
+  const secsRef = useRef(1);
+  const verified = useVerifiedCredential(searched, searchNo);
+  const credential = verified.data;
   const requests = credentials.filter((c) => c.status === 'pending_cosign' && c.cosignRequestedFrom === user?.id);
 
   const runVerify = (id: string) => {
     const started = startRef.current ?? performance.now();
-    const secs = Math.max(1, Math.round((performance.now() - started) / 1000));
+    secsRef.current = Math.max(1, Math.round((performance.now() - started) / 1000));
     startRef.current = null;
     setSearched(id);
+    setSearchNo((n) => n + 1);
     setNotice(null);
     setTrust(0);
-    const found = credentials.find((c) => c.id === id);
-    if (found) {
-      setElapsed(secs);
-      setEventId(recordVerification(id, secs));
-    } else {
-      setElapsed(null);
-      setEventId(null);
-    }
+    setElapsed(null);
+    setEventId(null);
   };
+
+  // Once the server has found the credential, record how long the check took (pilot metric).
+  useEffect(() => {
+    if (!searched) return;
+    if (verified.status === 'found') {
+      setElapsed(secsRef.current);
+      void recordVerification(searched, secsRef.current).then((id) => setEventId(id || null));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verified.status, searched, searchNo]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,12 +93,16 @@ export function EmployerDashboard() {
             </div>
           }
 
-          {searched && !credential &&
+          {searched && verified.status === 'loading' && !credential && <p role="status" className="text-sm text-ink-muted">Checking {searched}…</p>}
+
+          {searched && verified.status === 'missing' &&
           <div role="alert" className="rounded-2xl border border-bad-200 bg-bad-50 p-6">
               <p className="font-semibold text-bad-700">No credential found for {searched}</p>
               <p className="mt-1 text-sm text-bad-700">Treat this skill claim as unverified.</p>
             </div>
           }
+
+          <NoticeBanner />
 
           {credential &&
           <>
@@ -143,10 +157,13 @@ export function EmployerDashboard() {
         mode="flag"
         credentialId={flagging}
         onClose={() => setFlagging(null)}
-        onConfirm={(reason) => {
-          if (flagging && user) raiseFlag(flagging, reason, user.id);
+        onConfirm={async (reason) => {
+          const target = flagging;
           setFlagging(null);
-          setNotice('Flag sent. An administrator will review the evidence and the trainer will be notified.');
+          if (target && user && (await raiseFlag(target, reason, user.id))) {
+            setNotice('Flag sent. An administrator will review the evidence and the trainer will be notified.');
+            void verified.reload();
+          }
         }} />
       
     </>);

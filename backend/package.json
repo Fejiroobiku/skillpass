@@ -1,0 +1,31 @@
+{
+  "name": "skillpass-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SkillPass API: trainer-verified skills passport for informal apprentices in Nigeria",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "db:schema": "node scripts/db.js schema",
+    "db:seed": "node scripts/db.js seed",
+    "db:resign": "node scripts/db.js resign",
+    "db:reset": "node scripts/db.js reset",
+    "test": "node --test --test-concurrency=1 \"tests/*.test.js\""
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0",
+    "pg": "^8.23.1",
+    "zod": "^3.25.76"
+  }
+}

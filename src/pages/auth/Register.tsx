@@ -23,6 +23,7 @@ export function Register() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', dob: '', trade: trades[0]?.id ?? '', place: 'balogun', trainerId: '', workshop: '', company: '', membershipNo: '' });
   const [adult, setAdult] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -43,10 +44,12 @@ export function Register() {
   role !== 'employer' || form.company.trim().length > 1) && (
   role !== 'trainer' || form.membershipNo.trim().length > 3);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    const err = register({ role, name: form.name.trim(), email: form.email, phone: form.phone.trim(), password: form.password, dob: form.dob, trade: form.trade, location: places[form.place], trainerId: form.trainerId, workshop: form.workshop.trim(), company: form.company.trim(), membershipNo: form.membershipNo.trim() });
+    setBusy(true);
+    const err = await register({ role, name: form.name.trim(), email: form.email, phone: form.phone.trim(), password: form.password, dob: form.dob, trade: form.trade, location: places[form.place], trainerId: form.trainerId, workshop: form.workshop.trim(), company: form.company.trim(), membershipNo: form.membershipNo.trim(), consent });
+    setBusy(false);
     if (err) return setError(err);
     navigate(homeByRole[role]);
   };
@@ -115,7 +118,7 @@ export function Register() {
         </div>
 
         {error && <p role="alert" className="rounded-xl bg-bad-50 px-3.5 py-2.5 text-sm font-medium text-bad-700">{error}</p>}
-        <button type="submit" disabled={!valid} className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 disabled:opacity-50">Create account</button>
+        <button type="submit" disabled={!valid || busy} className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 disabled:opacity-50">{busy ? 'Creating account…' : 'Create account'}</button>
       </form>
       <p className="mt-5 text-center text-sm text-ink-muted">Already registered? <Link to="/login" className="font-semibold text-brand-700 hover:underline">Sign in</Link></p>
     </AuthLayout>);

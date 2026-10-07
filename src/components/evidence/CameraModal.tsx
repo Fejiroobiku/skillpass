@@ -2,15 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CameraIcon, CameraOffIcon, CircleIcon, MapPinIcon, SquareIcon, XIcon } from 'lucide-react';
 import type { Evidence, Place } from '../../types/skillpass';
-import { hashBlob } from '../../utils/hash';
-import { signPayload } from '../../utils/credentials';
+import { demoMode, messageOf } from '../../api/client';
+import { demoPhoto, demoVideo, lastDemo } from '../../api/demoEvidence';
+import { uploadEvidence } from '../../api/evidence';
 
 interface CameraModalProps {
   mode: 'photo' | 'video' | null;
   code: string;
   workshop: Place;
   fallbackUrl: string;
-  knownHashes: Set<string>;
   onCapture: (ev: Evidence) => void;
   onClose: () => void;
 }
@@ -24,7 +24,7 @@ interface Loc {
   lng?: number;
 }
 
-export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, onCapture, onClose }: CameraModalProps) {
+export function CameraModal({ mode, code, workshop, fallbackUrl, onCapture, onClose }: CameraModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -35,6 +35,7 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!mode) return;
@@ -43,6 +44,7 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
     setError(null);
     setSeconds(0);
     setRecording(false);
+    setUploadError(null);
 
     const start = async () => {
       try {
@@ -112,20 +114,35 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
     canvas.toBlob((blob) => resolve(blob ? { blob, url: URL.createObjectURL(blob) } : null), 'image/jpeg', 0.85);
   });
 
+  /** Send the captured file to the server. On a refusal (duplicate file, expired code) stay open so the trainer can retry. */
+  const send = async (blob: Blob, meta: Parameters<typeof uploadEvidence>[1]) => {
+    setBusy(true);
+    setUploadError(null);
+    try {
+      const ev = await uploadEvidence(blob, meta);
+      onCapture(ev);
+      onClose();
+    } catch (e) {
+      setUploadError(messageOf(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const where = { locationLabel: location.label, lat: location.lat, lng: location.lng };
+
   const takePhoto = async () => {
     setBusy(true);
     const shot = await snapshot();
-    if (shot) {
-      onCapture({ id: `ev-${Date.now()}`, kind: 'photo', url: shot.url, caption: 'Live photo of finished work', capturedAt: new Date().toISOString(), locationLabel: location.label, lat: location.lat, lng: location.lng, hash: await hashBlob(shot.blob), source: 'camera' });
-      onClose();
-    }
     setBusy(false);
+    if (shot) await send(shot.blob, { kind: 'photo', caption: 'Live photo of finished work', ...where });
   };
 
   const startRecording = async () => {
     const stream = streamRef.current;
     if (!stream || typeof MediaRecorder === 'undefined') return setError('Video recording is not supported on this browser.');
-    const poster = await snapshot();
+    if (!code) return setUploadError('Waiting for today\'s code. Try again in a moment.');
+    setUploadError(null);
     const chunks: Blob[] = [];
     const startedAt = Date.now();
     const rec = new MediaRecorder(stream);
@@ -135,32 +152,43 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
       setRecording(false);
       const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' });
       const duration = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-      onCapture({ id: `ev-${Date.now()}`, kind: 'video', url: URL.createObjectURL(blob), poster: poster?.url, caption: 'Live video of apprentice performing the task', capturedAt: new Date().toISOString(), locationLabel: location.label, lat: location.lat, lng: location.lng, hash: await hashBlob(blob), challengeCode: code, durationSec: duration, source: 'camera' });
-      onClose();
+      await send(blob, { kind: 'video', caption: 'Live video of apprentice performing the task', challengeCode: code, durationSec: duration, ...where });
     };
     setSeconds(0);
     rec.start(500);
     setRecording(true);
   };
 
-  const demoCapture = (reuse = false) => {
-    const existing = Array.from(knownHashes)[0];
-    onCapture({
-      id: `ev-demo-${Date.now()}`,
-      kind: mode === 'video' ? 'video' : 'photo',
-      url: fallbackUrl,
-      poster: fallbackUrl,
-      caption: reuse ? 'Re-used file (duplicate test)' : mode === 'video' ? 'Live video of apprentice performing the task' : 'Live photo of finished work',
-      capturedAt: new Date().toISOString(),
-      locationLabel: location.label === 'Locating…' ? `${workshop.name} (workshop)` : location.label,
-      lat: location.lat ?? workshop.lat,
-      lng: location.lng ?? workshop.lng,
-      hash: reuse && existing ? existing : signPayload(`${Date.now()}|${Math.random()}`) + signPayload(String(Math.random())),
-      challengeCode: mode === 'video' ? code : undefined,
-      durationSec: mode === 'video' ? 18 : undefined,
-      source: 'demo'
-    });
-    onClose();
+  /** Demo mode: build a real sample photo or video and upload it through the same checks as camera evidence. */
+  const demoCapture = async (reuse = false) => {
+    setBusy(true);
+    setUploadError(null);
+    try {
+      let blob: Blob;
+      let kind: 'photo' | 'video' = mode === 'video' ? 'video' : 'photo';
+      if (reuse) {
+        if (!lastDemo.blob) throw new Error('Capture something first, then try re-using that file.');
+        blob = lastDemo.blob;
+        kind = lastDemo.kind;
+      } else if (kind === 'video') {
+        if (!code) throw new Error('Waiting for today\'s code. Try again in a moment.');
+        blob = await demoVideo(fallbackUrl, code);
+      } else blob = await demoPhoto(fallbackUrl, workshop.name);
+      lastDemo.blob = blob;
+      lastDemo.kind = kind;
+      const ev = await uploadEvidence(blob, {
+        kind, caption: reuse ? 'Re-used file (duplicate test)' : kind === 'video' ? 'Live video of apprentice performing the task' : 'Live photo of finished work',
+        locationLabel: location.label === 'Locating…' ? `${workshop.name} (workshop)` : location.label,
+        lat: location.lat ?? workshop.lat, lng: location.lng ?? workshop.lng,
+        challengeCode: kind === 'video' ? code : undefined, durationSec: kind === 'video' ? 5 : undefined, source: 'demo'
+      });
+      onCapture(ev);
+      onClose();
+    } catch (e) {
+      setUploadError(messageOf(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -194,7 +222,7 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
               {mode === 'video' &&
             <div className="absolute left-3 top-3 rounded-xl bg-white px-3 py-2 text-ink">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">Show this code first</p>
-                  <p className="font-mono text-2xl font-semibold tracking-[0.2em]">{code}</p>
+                  <p className="font-mono text-2xl font-semibold tracking-[0.2em]">{code || '····'}</p>
                 </div>
             }
               {recording &&
@@ -215,7 +243,7 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
                 </button>
             }
               {ready && mode === 'video' && !recording &&
-            <button type="button" onClick={startRecording} aria-label="Start recording" className="flex h-16 w-16 items-center justify-center rounded-full bg-white transition-transform duration-100 active:scale-95">
+            <button type="button" onClick={startRecording} disabled={busy || !code} aria-label="Start recording" className="flex h-16 w-16 items-center justify-center rounded-full bg-white transition-transform duration-100 active:scale-95 disabled:opacity-50">
                   <CircleIcon className="h-8 w-8 fill-bad-600 text-bad-600" />
                 </button>
             }
@@ -227,10 +255,14 @@ export function CameraModal({ mode, code, workshop, fallbackUrl, knownHashes, on
               <p className="text-center text-xs text-white/60">
                 {mode === 'video' ? `Hold the code to the camera, then film the apprentice doing the task (${MIN_SECONDS}–${MAX_SECONDS}s).` : 'Photos are stamped with time and location. Gallery uploads are disabled.'}
               </p>
+              {busy && <p role="status" className="text-center text-xs font-medium text-white/80">Uploading… keep this open.</p>}
+              {uploadError && <p role="alert" className="w-full rounded-xl bg-bad-600/90 px-3 py-2 text-center text-xs font-medium text-white">{uploadError}</p>}
+              {demoMode &&
               <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs">
-                <button type="button" onClick={() => demoCapture(false)} className="font-medium text-brand-200 hover:underline">Use demo capture</button>
-                <button type="button" onClick={() => demoCapture(true)} className="font-medium text-white/50 hover:underline">Demo: re-used file</button>
+                <button type="button" disabled={busy} onClick={() => demoCapture(false)} className="font-medium text-brand-200 hover:underline disabled:opacity-50">Use demo capture</button>
+                <button type="button" disabled={busy} onClick={() => demoCapture(true)} className="font-medium text-white/50 hover:underline disabled:opacity-50">Demo: re-used file</button>
               </div>
+              }
             </div>
           </motion.div>
         </motion.div>

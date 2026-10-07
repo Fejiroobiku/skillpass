@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Credential, Evidence } from '../types/skillpass';
 import { useSkillPass } from '../contexts/SkillPassContext';
 import { useAuth } from '../contexts/AuthContext';
 import { rubricFor } from '../data/integrity';
-import { challengeCode } from '../utils/hash';
+import { messageOf } from '../api/client';
+import { requestChallengeCode } from '../api/evidence';
 import { isDuplicate } from '../components/evidence/EvidenceCapture';
 
 export function useIssueCredential(initialApprenticeId?: string | null) {
@@ -18,8 +19,9 @@ export function useIssueCredential(initialApprenticeId?: string | null) {
   );
   const [skillId, setSkillIdState] = useState<string | null>(null);
   const [criteria, setCriteria] = useState<string[]>([]);
-  const [evidence, setEvidence] = useState<Evidence[]>([]);
-  const [code, setCode] = useState(challengeCode);
+  const [evidence, setEvidenceState] = useState<Evidence[]>([]);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [observed, setObserved] = useState(false);
   const [cosignerId, setCosignerId] = useState('');
@@ -52,13 +54,30 @@ export function useIssueCredential(initialApprenticeId?: string | null) {
   const checks = {
     skill: !!skill,
     rubric: !!skill && rubric.every((r) => criteria.includes(r)),
-    video: evidence.some((e) => e.kind === 'video' && e.challengeCode === code),
+    video: evidence.some((e) => e.kind === 'video' && !!e.challengeCode),
     unique: evidence.length > 0 && !evidence.some((e) => isDuplicate(e, evidence, evidenceHashes)),
     observed,
     cosign: !needsCosign || !!cosignerId
   };
   const canIssue = me.approved && me.membershipVerified && !me.misconductAt;
   const ready = canIssue && Object.values(checks).every(Boolean);
+
+  // The code comes from the server and works for one video. Fetch a new one whenever it has been used.
+  const newCode = useCallback(async () => {
+    try {
+      setCode(await requestChallengeCode());
+    } catch (e) {
+      setCode('');
+      setError(messageOf(e));
+    }
+  }, []);
+  useEffect(() => {if (canIssue) void newCode();}, [canIssue, newCode]);
+
+  const setEvidence = (list: Evidence[]) => {
+    const addedVideo = list.some((e) => e.kind === 'video' && !evidence.some((x) => x.id === e.id));
+    setEvidenceState(list);
+    if (addedVideo) void newCode();
+  };
   const canRecordNotYet = !!skill && criteria.length < rubric.length && canIssue;
 
   const setSkillId = (id: string) => {
@@ -77,9 +96,11 @@ export function useIssueCredential(initialApprenticeId?: string | null) {
     setError(null);
   };
 
-  const submit = () => {
-    if (!ready || !skill) return;
-    const res = issueCredential({ trainerId: me.id, apprenticeId, skillId: skill.id, evidence, criteriaMet: criteria, note, cosignRequestedFrom: needsCosign ? cosignerId : undefined }, me.name);
+  const submit = async () => {
+    if (!ready || !skill || busy) return;
+    setBusy(true);
+    const res = await issueCredential({ trainerId: me.id, apprenticeId, skillId: skill.id, evidence, criteriaMet: criteria, note, cosignRequestedFrom: needsCosign ? cosignerId : undefined }, me.name);
+    setBusy(false);
     if (res.error) return setError(res.error);
     setError(null);
     setIssued(res.credential ?? null);
@@ -96,13 +117,13 @@ export function useIssueCredential(initialApprenticeId?: string | null) {
   const reset = () => {
     setSkillIdState(null);
     setCriteria([]);
-    setEvidence([]);
+    setEvidenceState([]);
     setNote('');
     setObserved(false);
     setCosignerId('');
     setIssued(null);
     setError(null);
-    setCode(challengeCode());
+    void newCode();
   };
 
   return {
@@ -111,6 +132,6 @@ export function useIssueCredential(initialApprenticeId?: string | null) {
     evidence, setEvidence, code, evidenceHashes, note, setNote, observed, setObserved,
     needsCosign, onProbation, mineCount, cosignTrainers, cosignEmployers, cosignerId, setCosignerId,
     dailyLimit: settings.dailyLimit, probationCount: settings.probationCount, todayCount, overLimit, risk, trust,
-    checks, canIssue, ready, submit, issued, reset, error, canRecordNotYet, saveNotYet, attemptSaved
+    checks, canIssue, ready, busy, submit, issued, reset, error, canRecordNotYet, saveNotYet, attemptSaved
   };
 }

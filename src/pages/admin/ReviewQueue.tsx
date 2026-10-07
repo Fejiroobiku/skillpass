@@ -57,7 +57,7 @@ export function ReviewQueue() {
         title="Review Queue"
         subtitle="Flags, risk-based and random audits, confidential reports and held credentials."
         actions={
-        <button type="button" onClick={() => {const n = runAuditSampling(actor);setNotice(`${n} credential${n === 1 ? '' : 's'} drawn at random for re-check.`);setTab('audits');}} className={`${secondary} inline-flex items-center gap-2 bg-white`}>
+        <button type="button" onClick={async () => {const n = await runAuditSampling(actor);setNotice(`${n} credential${n === 1 ? '' : 's'} drawn at random for re-check.`);setTab('audits');}} className={`${secondary} inline-flex items-center gap-2 bg-white`}>
             <ShuffleIcon className="h-4 w-4" /> Draw {settings.auditRatePct}% random sample
           </button>
         } />
@@ -143,7 +143,7 @@ export function ReviewQueue() {
             </div>
             {risk.signals.length > 0 && !t.misconductAt &&
           <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => {const n = auditTrainer(t.id, actor);setNotice(`${n} credential${n === 1 ? '' : 's'} from ${t.name} queued for independent audit.`);}} className={primary}>Audit all valid</button>
+                <button type="button" onClick={async () => {const n = await auditTrainer(t.id, actor);setNotice(`${n} credential${n === 1 ? '' : 's'} from ${t.name} queued for independent audit.`);}} className={primary}>Audit all valid</button>
                 <button type="button" onClick={() => markMisconduct(t.id, 'Administrator finding', actor)} className={danger}>Mark misconduct</button>
               </div>
           }

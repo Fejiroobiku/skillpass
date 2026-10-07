@@ -116,7 +116,7 @@ export function AdminSkills() {
         <input id="new-trade" value={newTrade} onChange={(e) => setNewTrade(e.target.value)} placeholder="e.g. Plumbing" className="mt-1.5 w-full rounded-xl border border-line px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100" />
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={() => setTradeOpen(false)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-ink hover:bg-canvas">Cancel</button>
-          <button type="button" disabled={newTrade.trim().length < 3} onClick={() => {setTradeId(addTrade(newTrade.trim(), actor));setNewTrade('');setTradeOpen(false);}} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Create trade</button>
+          <button type="button" disabled={newTrade.trim().length < 3} onClick={async () => {const id = await addTrade(newTrade.trim(), actor);if (id) setTradeId(id);setNewTrade('');setTradeOpen(false);}} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Create trade</button>
         </div>
       </Modal>
     </>);

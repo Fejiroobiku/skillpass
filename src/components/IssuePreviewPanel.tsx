@@ -133,7 +133,7 @@ export function IssuePreviewPanel({ form }: {form: Form;}) {
             {form.error && <p role="alert" className="rounded-xl bg-bad-50 p-3.5 text-sm font-medium text-bad-700">{form.error}</p>}
 
             <div>
-              <button type="button" disabled={!ready} onClick={form.submit} className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-brand-600 px-5 py-4 text-base font-semibold text-white transition-colors duration-150 hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-200">
+              <button type="button" disabled={!ready || form.busy} onClick={form.submit} className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-brand-600 px-5 py-4 text-base font-semibold text-white transition-colors duration-150 hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-200">
                 <CircleCheckBigIcon className="h-5 w-5" /> Sign & Issue <ArrowRightIcon className="h-5 w-5" />
               </button>
               <p className="mt-2 text-center text-xs text-ink-muted">The apprentice must confirm before it becomes valid. Apprentices cannot create or edit credentials.</p>

@@ -30,13 +30,19 @@ import { Profile } from './pages/shared/Profile';
 import { Notifications } from './pages/shared/Notifications';
 import { UsabilitySurvey } from './pages/shared/UsabilitySurvey';
 
+function Loading() {
+  return <p role="status" className="p-10 text-center text-ink-muted">Loading SkillPass…</p>;
+}
+
 function RequireAuth() {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
+  if (!ready) return <Loading />;
   return user ? <DashboardLayout /> : <Navigate to="/login" replace />;
 }
 
 function RoleGuard({ role }: {role: Role;}) {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
+  if (!ready) return <Loading />;
   if (!user) return <Navigate to="/login" replace />;
   return user.role === role ? <Outlet /> : <Navigate to={homeByRole[user.role]} replace />;
 }
@@ -47,7 +53,8 @@ function HomeRedirect() {
 }
 
 function GuestOnly({ children }: {children: React.ReactNode;}) {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
+  if (!ready) return <Loading />;
   return user ? <Navigate to={homeByRole[user.role]} replace /> : <>{children}</>;
 }
 

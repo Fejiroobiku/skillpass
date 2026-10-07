@@ -13,7 +13,7 @@ import { formatDate } from '../../utils/credentials';
 
 export function EmployerJobs() {
   const { user } = useAuth();
-  const { jobs, credentials, referrals, apprentices, trainers: allTrainers, skills: allSkills, trades, postJob, sendReferral } = useSkillPass();
+  const { jobs, credentials, referrals, apprentices, employers, trainers: allTrainers, skills: allSkills, trades, postJob, sendReferral } = useSkillPass();
   const skills = allSkills.filter((s) => s.status === 'active');
   const me = { id: user?.id ?? '', name: user?.name ?? '' };
   const myJobs = jobs.filter((j) => j.employerId === me.id);
@@ -23,13 +23,15 @@ export function EmployerJobs() {
 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [trade, setTrade] = useState<TradeId>('electrical');
+  const myTrade = employers.find((e) => e.id === user?.id)?.trade ?? 'electrical';
+  const [trade, setTrade] = useState<TradeId>(myTrade);
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [placeKey, setPlaceKey] = useState('lekki');
   const [pay, setPay] = useState('');
 
-  const create = () => {
-    const job = postJob({ employerId: me.id, title: title.trim(), trade, skillIds, location: places[placeKey], pay: pay.trim() || 'Negotiable' });
+  const create = async () => {
+    const job = await postJob({ employerId: me.id, title: title.trim(), trade, skillIds, location: places[placeKey], pay: pay.trim() || 'Negotiable' });
+    if (!job) return;
     setSelectedId(job.id);
     setOpen(false);
     setTitle('');
@@ -115,7 +117,7 @@ export function EmployerJobs() {
             <div>
               <label htmlFor="job-trade" className="block text-sm font-semibold text-ink">Trade</label>
               <select id="job-trade" value={trade} onChange={(e) => {setTrade(e.target.value as TradeId);setSkillIds([]);}} className="mt-1.5 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm">
-                {trades.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {trades.filter((t) => t.id === myTrade).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
             <div>

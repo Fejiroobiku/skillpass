@@ -34,35 +34,44 @@ Integrity safeguards:
 ## Tech stack
 
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, React Router
-- **Backend (in progress):** Node.js, Express, JWT authentication, bcrypt [update when done]
-- **Database (in progress):** PostgreSQL [update when done]
+- **Backend:** Node.js 22, Express 5, JWT authentication, bcrypt (see `backend/README.md`)
+- **Database:** PostgreSQL 14 or later
 - **Hosting (planned):** see Deployment plan
 
 ## Setup
 
 ### Prerequisites
-- Node.js 18 or later
+- Node.js 22 or later
 - npm
-- PostgreSQL 14 or later [needed once the backend is added]
+- PostgreSQL 14 or later
 
 ### Run the frontend
 ```bash
 git clone [your repo link]
 cd [repo folder]
+cp .env.example .env.local   # VITE_API_URL points at the backend, VITE_DEMO_MODE=true shows the demo helpers
 npm install
 npm run dev
 ```
-Open the local address shown in the terminal (usually http://localhost:5173).
+Open the local address shown in the terminal (usually http://localhost:5173). The frontend needs the backend running.
 
-### Run the backend [update when done]
+### Run the backend
 ```bash
 cd backend
-cp .env.example .env      # add DATABASE_URL, JWT_SECRET, SIGNING_KEY
+cp .env.example .env      # set DATABASE_URL, JWT_SECRET and SIGNING_KEY (the file explains how to generate them)
 npm install
-psql -d skillpass -f database/schema.sql
-psql -d skillpass -f database/seed.sql
-npm run dev
+npm run db:schema         # create the tables in an empty database
+npm run db:seed           # load the demo accounts and data (demo databases only)
+npm run dev               # http://localhost:4000
 ```
+Start the backend first, then the frontend. Full details are in `backend/README.md`.
+
+### Run the tests
+```bash
+cd backend && npm test    # API tests against a real PostgreSQL database named skillpass_test
+cd .. && npm test         # UI tests: the real app against the real backend
+```
+Both create and wipe a database called `skillpass_test`, so create it first (`createdb skillpass_test`).
 
 ### Demo accounts
 All accounts use the password `demo1234`.
@@ -74,7 +83,7 @@ All accounts use the password `demo1234`.
 | Apprentice | tobi@skillpass.ng |
 | Employer | folake@skillpass.ng |
 
-The login page also has quick-login buttons for each role.
+They exist after `npm run db:seed`. The login page shows quick-login buttons for each role only when `VITE_DEMO_MODE=true`.
 
 ## Designs
 
@@ -93,7 +102,7 @@ The login page also has quick-login buttons for each role.
 ## Database schema
 
 Main tables: `users`, `trades`, `skills`, `credentials`, `evidence`, `flags`, `feedback`, `job_postings`, `referrals`, `audit_log`.
-Full schema: `database/schema.sql` [add when done].
+Full schema: `backend/database/schema.sql`.
 
 ## Deployment plan
 
@@ -113,9 +122,9 @@ Steps:
 
 ## Current status and next steps
 
-- Done: frontend for all roles with seeded demo data, evidence capture, review queue, audit log
-- In progress: backend API and database
-- Next: move credential signing and the daily issuing limit to the server, connect frontend to the API, deploy
+- Done: frontend for all roles, backend API and database, frontend connected to the API, server-side integrity rules (issuing limit, probation, co-signing, duplicate-evidence blocking, signing, scoring, audit log)
+- Done: automated tests for the API and for the app running against it
+- Next: deploy, send SMS (notifications are stored but not yet sent), move evidence to cloud storage, delete personal data when consent is withdrawn
 
 ## Author
 

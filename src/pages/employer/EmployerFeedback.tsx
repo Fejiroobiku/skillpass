@@ -30,11 +30,11 @@ export function EmployerFeedback() {
     setComment('');
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!rating || !user) return;
     const job = jobs.find((j) => j.id === rating.jobId);
     const linked = credentials.filter((c) => c.apprenticeId === rating.apprenticeId && c.status === 'valid' && job?.skillIds.includes(c.skillId)).map((c) => c.id);
-    const err = addFeedback({ apprenticeId: rating.apprenticeId, employerId: user.id, credentialIds: linked, rating: stars, comment: comment.trim(), referralId: rating.id });
+    const err = await addFeedback({ apprenticeId: rating.apprenticeId, employerId: user.id, credentialIds: linked, rating: stars, comment: comment.trim(), referralId: rating.id });
     setError(err);
     setRating(null);
   };

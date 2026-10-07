@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { AuthLayout } from '../../components/AuthLayout';
 import { useAuth } from '../../contexts/AuthContext';
-import { DEMO_PASSWORD, demoLogins, seedAccounts } from '../../data/accounts';
-import { homeByRole } from '../../data/navigation';
+import { demoMode } from '../../api/client';
+import { DEMO_PASSWORD, demoLogins } from '../../data/accounts';
 
 const input = 'mt-1.5 w-full rounded-xl border border-line px-3.5 py-3 text-sm text-ink placeholder:text-ink-subtle focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 
@@ -15,12 +15,14 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const go = (em: string, pw: string) => {
-    const err = login(em, pw);
+  const go = async (em: string, pw: string) => {
+    setBusy(true);
+    const err = await login(em, pw);
+    setBusy(false);
     if (err) return setError(err);
-    const role = seedAccounts.find((a) => a.email === em)?.role;
-    navigate(role ? homeByRole[role] : '/');
+    navigate('/'); // the home route sends each role to its own dashboard
   };
 
   return (
@@ -43,11 +45,12 @@ export function Login() {
           </div>
         </div>
         {error && <p role="alert" className="rounded-xl bg-bad-50 px-3.5 py-2.5 text-sm font-medium text-bad-700">{error}</p>}
-        <button type="submit" disabled={!email || !password} className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 disabled:opacity-50">Sign in</button>
+        <button type="submit" disabled={!email || !password || busy} className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 disabled:opacity-50">{busy ? 'Signing in…' : 'Sign in'}</button>
       </form>
 
       <p className="mt-5 text-center text-sm text-ink-muted">New to the pilot? <Link to="/register" className="font-semibold text-brand-700 hover:underline">Create an account</Link></p>
 
+      {demoMode &&
       <div className="mt-8 border-t border-line pt-6">
         <p className="text-sm font-semibold text-ink">Demo accounts</p>
         <p className="text-xs text-ink-muted">Password for all: <span className="font-mono">{DEMO_PASSWORD}</span></p>
@@ -60,6 +63,7 @@ export function Login() {
           )}
         </div>
       </div>
+      }
     </AuthLayout>);
 
 }

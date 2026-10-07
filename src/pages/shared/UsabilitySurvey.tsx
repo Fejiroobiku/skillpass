@@ -4,7 +4,6 @@ import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSkillPass } from '../../contexts/SkillPassContext';
 import { susStatements } from '../../data/pilot';
-import { susScore } from '../../utils/credentials';
 
 const scale = ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'];
 
@@ -35,7 +34,7 @@ export function UsabilitySurvey() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (complete) submitSus(user.id, user.role, susScore(answers as number[]));
+          if (complete) void submitSus(answers as number[]);
         }}
         className="mx-auto max-w-3xl space-y-3">
         
